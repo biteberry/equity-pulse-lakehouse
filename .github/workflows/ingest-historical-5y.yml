@@ -1,0 +1,55 @@
+name: ingest-historical-5y
+
+# Workflow A: On-demand 5-Year Historical Backfill (NIFTY 50 + Past 1Y Listed IPOs + Sector + Macro)
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Backfill scope"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - nifty50
+          - recent_ipos
+          - macro
+      years:
+        description: "Number of historical years to fetch (default: 5)"
+        required: true
+        default: "5"
+        type: string
+      specific_ticker:
+        description: "Optional single ticker (e.g. RELIANCE.NS) or leave blank for all"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: equity-pulse-ec2-worker
+  cancel-in-progress: false
+
+jobs:
+  historical-backfill:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run 5-Year Historical Ingestion on EC2
+        uses: ./.github/actions/run-on-ec2
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          aws_region: "ap-south-1"
+          workflow_title: "5-Year Historical Data Backfill (NIFTY 50 + 1Y IPOs + Sector)"
+          git_ref: ${{ github.ref_name }}
+          cli_args: >-
+            --job historical_5y
+            --scope ${{ inputs.scope }}
+            --years ${{ inputs.years }}
+            ${{ inputs.specific_ticker != '' && format('--ticker {0}', inputs.specific_ticker) || '' }}

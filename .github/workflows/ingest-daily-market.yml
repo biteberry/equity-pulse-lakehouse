@@ -1,0 +1,53 @@
+name: ingest-daily-market
+
+# Workflow B: Daily 10:00 PM IST (Mon-Fri, except Sat & Sun) + Manual trigger
+# Ingests NIFTY 50 + Past 1-Year Listed IPOs (OHLCV + Sector + Delivery %), Macro/FII-DII, and Financial News
+on:
+  schedule:
+    # 10:00 PM IST = 16:30 UTC (Monday through Friday: 1-5)
+    - cron: "30 16 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Market job to run"
+        required: true
+        default: "daily_market_all"
+        type: choice
+        options:
+          - daily_market_all
+          - market_eod
+          - flows_macro
+          - news_daily
+          - universe_sync
+      trade_date:
+        description: "Target trade date (YYYY-MM-DD or 'today')"
+        required: false
+        default: "today"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: equity-pulse-ec2-worker
+  cancel-in-progress: false
+
+jobs:
+  daily-market:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Daily Market Ingestion on EC2
+        uses: ./.github/actions/run-on-ec2
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          aws_region: "ap-south-1"
+          workflow_title: "Daily Market EOD Ingestion (NIFTY 50 + Past 1Y Listed IPOs + Sector)"
+          git_ref: ${{ github.ref_name }}
+          cli_args: >-
+            --job ${{ inputs.job || 'daily_market_all' }}
+            --date ${{ inputs.trade_date || 'today' }}
