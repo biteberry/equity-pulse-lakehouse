@@ -3,10 +3,18 @@ name: terraform
 on:
   pull_request:
     branches: [main]
-    paths: ["terraform/**"]
+    paths:
+      - "terraform/**/*.tf"
+      - "terraform/**/*.sh"
+      - "terraform/**/*.json"
+      - ".github/workflows/terraform.yml"
   push:
     branches: [main]
-    paths: ["terraform/**"]
+    paths:
+      - "terraform/**/*.tf"
+      - "terraform/**/*.sh"
+      - "terraform/**/*.json"
+      - ".github/workflows/terraform.yml"
   workflow_dispatch:
     inputs:
       action:
