@@ -1,0 +1,73 @@
+name: ec2-trigger
+
+# Start / stop the worker, or run a command on it via SSM (no SSH, no open ports).
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "start | stop | status | run"
+        default: status
+        type: choice
+        options: [start, stop, status, run]
+      command:
+        description: "Shell command for 'run' (e.g. ingestion job)"
+        default: "uptime && free -h"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+
+jobs:
+  ec2:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve instance
+        id: inst
+        run: |
+          ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Role,Values=ingestion-worker" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+            --query "Reservations[0].Instances[0].InstanceId" --output text)
+          [ "$ID" = "None" ] && { echo "No worker instance found"; exit 1; }
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+      - name: Start
+        if: inputs.action == 'start' || inputs.action == 'run'
+        run: |
+          aws ec2 start-instances --instance-ids ${{ steps.inst.outputs.id }}
+          aws ec2 wait instance-status-ok --instance-ids ${{ steps.inst.outputs.id }}
+
+      - name: Stop
+        if: inputs.action == 'stop'
+        run: |
+          aws ec2 stop-instances --instance-ids ${{ steps.inst.outputs.id }}
+          aws ec2 wait instance-stopped --instance-ids ${{ steps.inst.outputs.id }}
+
+      - name: Run command via SSM
+        if: inputs.action == 'run'
+        env:
+          CMD: ${{ inputs.command }}
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids ${{ steps.inst.outputs.id }} \
+            --document-name AWS-RunShellScript \
+            --parameters "$(jq -n --arg c "$CMD" '{commands:[$c]}')" \
+            --query "Command.CommandId" --output text)
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id ${{ steps.inst.outputs.id }} || true
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id ${{ steps.inst.outputs.id }} \
+            --query "{Status:Status,Out:StandardOutputContent,Err:StandardErrorContent}" --output json
+
+      - name: Status
+        if: always()
+        run: |
+          aws ec2 describe-instances --instance-ids ${{ steps.inst.outputs.id }} \
+            --query "Reservations[0].Instances[0].{State:State.Name,Type:InstanceType,PublicIp:PublicIpAddress}" --output table

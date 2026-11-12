@@ -1,0 +1,60 @@
+name: terraform
+
+on:
+  pull_request:
+    paths: ["terraform/**"]
+  push:
+    branches: [main]
+    paths: ["terraform/envs/**", "terraform/modules/**"]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "plan | apply | destroy"
+        default: plan
+        type: choice
+        options: [plan, apply, destroy]
+
+permissions:
+  id-token: write # OIDC
+  contents: read
+
+concurrency: terraform-dev
+
+env:
+  AWS_REGION: ap-south-1
+  TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    environment: dev
+    defaults:
+      run:
+        working-directory: terraform/envs/dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - run: terraform fmt -check -recursive ../../
+      - run: terraform init -input=false -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}"
+      - run: terraform validate
+
+      - name: Plan
+        if: github.event_name == 'pull_request' || inputs.action == 'plan'
+        run: terraform plan -input=false
+
+      - name: Apply
+        if: github.event_name == 'push' || inputs.action == 'apply'
+        run: terraform apply -input=false -auto-approve
+
+      - name: Destroy
+        if: inputs.action == 'destroy'
+        run: terraform destroy -input=false -auto-approve
