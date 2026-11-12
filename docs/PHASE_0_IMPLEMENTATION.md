@@ -12,7 +12,7 @@ This document maps [PHASE_0_ARCHITECTURE_SPEC.md](file:///c:/Manivannan/Workspac
 - **IAM (`terraform/modules/iam` & `terraform/bootstrap`):**
   - **EC2 Instance Profile:** Attached with `AmazonSSMManagedInstanceCore` (enables keyless control via AWS Systems Manager) and least-privilege `s3:PutObject` only on `s3://stock-lakehouse-bronze-<account-id>/*`.
   - **GitHub OIDC Role:** Short-lived credentials via OpenID Connect (`aws-actions/configure-aws-credentials`) — zero static AWS keys stored in GitHub.
-- **Free Tier EC2 (`terraform/modules/ec2_worker`):** Ubuntu 24.04 LTS (`t3.micro`), 20 GB encrypted `gp3` volume, `cpu_credits = "standard"` (prevents T3 Unlimited charges), IMDSv2 enforced.
+- **Free Tier EC2 (`terraform/modules/ec2_worker`):** Ubuntu 24.04 LTS (`m7i-flex.large` — 2 vCPU, 8 GB RAM, Free Tier eligible), 20 GB encrypted `gp3` volume, IMDSv2 enforced.
 - **Bootstrap (`user_data.sh`):** Configures `Asia/Kolkata` timezone, allocates and mounts a **2 GB swap file** (`vm.swappiness=10`), installs Python 3 `venv`/`pip`/`jq`, starts `amazon-ssm-agent`, and prepares `/opt/equity-pulse/.venv`.
 - **Cost Guardrails (`terraform/envs/dev`):** S3 Lifecycle rule transitions Bronze objects to `GLACIER_IR` after 90 days; AWS Budgets alerts configured at **50%** and **90%** of the $6 (~₹500) monthly cap.
 

@@ -7,7 +7,7 @@ terraform/
 │   ├── network/      # VPC, public subnet, IGW, route table, S3 gateway endpoint
 │   ├── security/     # egress-only SG (optional emergency SSH)
 │   ├── iam/          # EC2 role: SSM + Bronze bucket write; instance profile
-│   └── ec2_worker/   # t3.micro Ubuntu 24.04, 20 GB gp3, IMDSv2, swap via user_data
+│   └── ec2_worker/   # m7i-flex.large Ubuntu 24.04, 20 GB gp3, IMDSv2, swap via user_data
 └── envs/dev/         # wires modules + Bronze bucket + AWS Budget alerts
 ```
 
@@ -38,6 +38,5 @@ terraform apply -var="github_repo=<owner>/equity-pulse-lakehouse"
 **Actions → ec2-trigger → Run workflow**: `start`, `stop`, `status`, or `run` (executes a shell command through SSM Run Command; output shown in the job log).
 
 ## Cost notes
-- `t3.micro` + 20 GB `gp3` + 1 public IPv4: covered by Free Tier (750 hrs each) for 12 months.
+- `m7i-flex.large` + 20 GB `gp3` + 1 public IPv4: covered by AWS Free Tier (750 hrs/mo).
 - No NAT Gateway, no Elastic IP. S3 traffic goes via the free gateway endpoint.
-- `cpu_credits = standard` prevents T3 Unlimited burst charges.

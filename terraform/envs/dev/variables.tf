@@ -4,9 +4,9 @@ variable "region" {
 }
 
 variable "instance_type" {
-  description = "Free-tier eligible: t3.micro (or t2.micro)"
+  description = "Free-tier eligible: m7i-flex.large (or t3.micro)"
   type        = string
-  default     = "t3.micro"
+  default     = "m7i-flex.large"
 }
 
 variable "ssh_cidr" {

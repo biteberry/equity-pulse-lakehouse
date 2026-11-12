@@ -1,4 +1,4 @@
-# Free-tier ingestion worker (Ubuntu 24.04, t3.micro, 20 GB gp3, 2 GB swap via user_data).
+# Free-tier ingestion worker (Ubuntu 24.04, m7i-flex.large, 20 GB gp3, 2 GB swap via user_data).
 
 variable "name" { type = string }
 variable "subnet_id" { type = string }
@@ -6,7 +6,7 @@ variable "security_group_id" { type = string }
 variable "instance_profile_name" { type = string }
 variable "instance_type" {
   type    = string
-  default = "t3.micro"
+  default = "m7i-flex.large"
 }
 variable "root_volume_gb" {
   type    = number
@@ -41,8 +41,6 @@ resource "aws_instance" "worker" {
     encrypted             = true
     delete_on_termination = true
   }
-
-  credit_specification { cpu_credits = "standard" } # no T3 Unlimited surprise charges
 
   lifecycle { ignore_changes = [ami] }
 

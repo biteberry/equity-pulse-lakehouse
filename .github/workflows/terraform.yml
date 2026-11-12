@@ -2,10 +2,11 @@ name: terraform
 
 on:
   pull_request:
+    branches: [main]
     paths: ["terraform/**"]
   push:
     branches: [main]
-    paths: ["terraform/envs/**", "terraform/modules/**"]
+    paths: ["terraform/**"]
   workflow_dispatch:
     inputs:
       action:
@@ -15,17 +16,24 @@ on:
         options: [plan, apply, destroy]
 
 permissions:
-  id-token: write # OIDC
+  id-token: write       # AWS OIDC
   contents: read
+  pull-requests: write  # Post plan summary comment on PR
 
-concurrency: terraform-dev
+concurrency:
+  group: terraform-dev-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   AWS_REGION: ap-south-1
   TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
 
 jobs:
-  terraform:
+  # -------------------------------------------------------------------
+  # 1. PR Check + Plan (runs on every PR changing terraform/**, and before apply on merge)
+  # -------------------------------------------------------------------
+  plan:
+    name: Terraform Plan
     runs-on: ubuntu-latest
     environment: dev
     defaults:
@@ -43,18 +51,115 @@ jobs:
         with:
           terraform_version: 1.10.5
 
-      - run: terraform fmt -check -recursive ../../
-      - run: terraform init -input=false -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}"
-      - run: terraform validate
+      - name: Format Check
+        run: terraform fmt -check -recursive ../../
+
+      - name: Init
+        run: terraform init -input=false -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}"
+
+      - name: Validate
+        run: terraform validate
 
       - name: Plan
-        if: github.event_name == 'pull_request' || inputs.action == 'plan'
-        run: terraform plan -input=false
+        id: plan
+        run: terraform plan -input=false -no-color -out=tfplan
+        continue-on-error: true
 
-      - name: Apply
+      - name: Comment Plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          PLAN: "${{ steps.plan.outputs.stdout }}"
+        with:
+          script: |
+            const output = `#### Terraform Plan 📖 \`${{ steps.plan.outcome }}\`
+            <details><summary>Show Plan</summary>
+
+            \`\`\`hcl
+            ${process.env.PLAN.slice(0, 60000)}
+            \`\`\`
+
+            </details>`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Fail if Plan Failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Upload Plan Artifact
         if: github.event_name == 'push' || inputs.action == 'apply'
-        run: terraform apply -input=false -auto-approve
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: terraform/envs/dev/tfplan
+          retention-days: 1
+
+  # -------------------------------------------------------------------
+  # 2. Apply (runs automatically when PR merges to main, or via manual dispatch)
+  # -------------------------------------------------------------------
+  apply:
+    name: Terraform Apply
+    needs: plan
+    if: github.event_name == 'push' || inputs.action == 'apply'
+    runs-on: ubuntu-latest
+    environment: dev
+    defaults:
+      run:
+        working-directory: terraform/envs/dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: terraform/envs/dev
+
+      - name: Init
+        run: terraform init -input=false -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}"
+
+      - name: Apply Exact Plan
+        run: terraform apply -input=false -auto-approve tfplan
+
+  # -------------------------------------------------------------------
+  # 3. Destroy (manual workflow_dispatch only)
+  # -------------------------------------------------------------------
+  destroy:
+    name: Terraform Destroy
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: dev
+    defaults:
+      run:
+        working-directory: terraform/envs/dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Init
+        run: terraform init -input=false -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}"
 
       - name: Destroy
-        if: inputs.action == 'destroy'
         run: terraform destroy -input=false -auto-approve
