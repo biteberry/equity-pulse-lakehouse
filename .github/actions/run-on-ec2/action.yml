@@ -81,30 +81,31 @@ runs:
         set -euo pipefail
         INST_ID="${{ steps.inst.outputs.id }}"
 
-        REMOTE_SCRIPT=$(cat <<EOF
-        set -euo pipefail
-        export AWS_DEFAULT_REGION="${{ inputs.aws_region }}"
-        export AWS_REGION="${{ inputs.aws_region }}"
-        mkdir -p /opt/equity-pulse
-        if [ ! -d /opt/equity-pulse/repo/.git ]; then
-          git clone "$REPO_URL" /opt/equity-pulse/repo
-        fi
-        cd /opt/equity-pulse/repo
-        git fetch origin --prune
-        git checkout -f "$GIT_REF"
-        git pull origin "$GIT_REF" --ff-only || true
-
-        if [ ! -d /opt/equity-pulse/.venv ]; then
-          python3 -m venv /opt/equity-pulse/.venv
-        fi
-        /opt/equity-pulse/.venv/bin/pip install --quiet --upgrade pip
-        /opt/equity-pulse/.venv/bin/pip install --quiet -r ingestion/requirements.txt
-
-        /opt/equity-pulse/.venv/bin/python -m ingestion.cli $CLI_ARGS
-        EOF
-        )
-
-        PARAMS=$(jq -n --arg cmd "$REMOTE_SCRIPT" '{commands: [$cmd], executionTimeout: ["3600"]}')
+        PARAMS=$(jq -n \
+          --arg region "${{ inputs.aws_region }}" \
+          --arg repo "$REPO_URL" \
+          --arg ref "$GIT_REF" \
+          --arg args "$CLI_ARGS" \
+          '{
+            executionTimeout: ["3600"],
+            commands: [
+              "#!/bin/bash",
+              "set -eu",
+              ("export AWS_DEFAULT_REGION=" + $region),
+              ("export AWS_REGION=" + $region),
+              "mkdir -p /opt/equity-pulse",
+              ("if [ ! -d /opt/equity-pulse/repo/.git ]; then git clone " + $repo + " /opt/equity-pulse/repo; fi"),
+              "cd /opt/equity-pulse/repo",
+              "git config --global --add safe.directory /opt/equity-pulse/repo || true",
+              "git fetch origin --prune",
+              ("git checkout -f " + $ref),
+              ("git reset --hard origin/" + $ref),
+              "if [ ! -d /opt/equity-pulse/.venv ]; then python3 -m venv /opt/equity-pulse/.venv; fi",
+              "/opt/equity-pulse/.venv/bin/pip install --quiet --upgrade pip",
+              "/opt/equity-pulse/.venv/bin/pip install --quiet -r ingestion/requirements.txt",
+              ("/opt/equity-pulse/.venv/bin/python -m ingestion.cli " + $args)
+            ]
+          }')
         CMD_ID=$(aws ssm send-command \
           --instance-ids "$INST_ID" \
           --document-name "AWS-RunShellScript" \
