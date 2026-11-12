@@ -35,7 +35,6 @@ jobs:
   plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
-    environment: dev
     defaults:
       run:
         working-directory: terraform/envs/dev

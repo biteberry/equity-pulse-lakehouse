@@ -47,7 +47,7 @@ Following a **Spec-Driven Development** approach, this document defines the syst
 
 | 3. LAKEHOUSE STORAGE: BRONZE LANDING ZONE (AMAZON S3)                             |
 |                                                                                   |
-|  s3://stock-lakehouse-bronze-<account-id>/                                        |
+|  s3://equity-pulse-landing-<account-id>/                                          |
 |   ├── market_data/          (Parquet - Hive Partitioned)                          |
 |   ├── macro_commodities/    (Parquet - Hive Partitioned)                          |
 |   ├── news_events/          (JSON - Hive Partitioned)                             |
@@ -91,10 +91,10 @@ To strictly stay within the **₹200 – ₹500/month** budget, all infrastructu
 ## 5. S3 Storage Layout & Data Contracts (Bronze Layer)
 
 ### 5.1 S3 Bucket Naming & Hive Partitioning
-**Bucket Name:** `s3://stock-lakehouse-bronze-<unique-id>/`
+**Bucket Name:** `s3://equity-pulse-landing-<unique-id>/`
 
 ```text
-s3://stock-lakehouse-bronze-<unique-id>/
+s3://equity-pulse-landing-<unique-id>/
 ├── market_data/
 │   ├── daily_ohlcv/year=YYYY/month=MM/ohlcv_YYYYMMDD.parquet
 │   └── fii_dii_flows/year=YYYY/month=MM/flows_YYYYMMDD.parquet

@@ -5,7 +5,7 @@ terraform {
   }
   # bucket supplied via: terraform init -backend-config="bucket=<state_bucket>"
   backend "s3" {
-    key          = "envs/dev/terraform.tfstate"
+    key          = "_tfstate/envs/dev/terraform.tfstate"
     region       = "ap-south-1"
     encrypt      = true
     use_lockfile = true
@@ -22,33 +22,13 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  name = "equity-pulse-dev"
+  name           = "equity-pulse-dev"
+  landing_bucket = "equity-pulse-landing-${data.aws_caller_identity.current.account_id}"
 }
 
-# ---------- Bronze bucket ----------
-resource "aws_s3_bucket" "bronze" {
-  bucket = "stock-lakehouse-bronze-${data.aws_caller_identity.current.account_id}"
-}
-
-resource "aws_s3_bucket_public_access_block" "bronze" {
-  bucket                  = aws_s3_bucket.bronze.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "bronze" {
-  bucket = aws_s3_bucket.bronze.id
-  rule {
-    id     = "to-glacier-ir-90d"
-    status = "Enabled"
-    filter {}
-    transition {
-      days          = 90
-      storage_class = "GLACIER_IR"
-    }
-  }
+# ---------- Landing bucket (existing: equity-pulse-landing-<account_id>) ----------
+data "aws_s3_bucket" "landing" {
+  bucket = local.landing_bucket
 }
 
 # ---------- Stacks ----------
@@ -66,9 +46,9 @@ module "security" {
 }
 
 module "iam" {
-  source            = "../../modules/iam"
-  name              = local.name
-  bronze_bucket_arn = aws_s3_bucket.bronze.arn
+  source             = "../../modules/iam"
+  name               = local.name
+  landing_bucket_arn = data.aws_s3_bucket.landing.arn
 }
 
 module "ec2_worker" {

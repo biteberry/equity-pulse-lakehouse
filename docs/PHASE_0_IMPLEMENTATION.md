@@ -10,7 +10,7 @@ This document maps [PHASE_0_ARCHITECTURE_SPEC.md](file:///c:/Manivannan/Workspac
 - **Network (`terraform/modules/network`):** Dedicated VPC (`10.20.0.0/16`), single public subnet in `ap-south-1a`, Internet Gateway, and a **free S3 Gateway VPC Endpoint** so all S3 Bronze writes avoid internet data transfer costs. No NAT Gateway (saves ~₹2,700/mo).
 - **Security Group (`terraform/modules/security`):** Zero inbound ports open by default (`0` ingress rules). Outbound `443`/`80` enabled for APIs, package updates, S3, and AWS SSM. Optional emergency SSH CIDR variable (`ssh_cidr`).
 - **IAM (`terraform/modules/iam` & `terraform/bootstrap`):**
-  - **EC2 Instance Profile:** Attached with `AmazonSSMManagedInstanceCore` (enables keyless control via AWS Systems Manager) and least-privilege `s3:PutObject` only on `s3://stock-lakehouse-bronze-<account-id>/*`.
+  - **EC2 Instance Profile:** Attached with `AmazonSSMManagedInstanceCore` (enables keyless control via AWS Systems Manager) and least-privilege `s3:PutObject` only on `s3://equity-pulse-landing-<account-id>/*`.
   - **GitHub OIDC Role:** Short-lived credentials via OpenID Connect (`aws-actions/configure-aws-credentials`) — zero static AWS keys stored in GitHub.
 - **Free Tier EC2 (`terraform/modules/ec2_worker`):** Ubuntu 24.04 LTS (`m7i-flex.large` — 2 vCPU, 8 GB RAM, Free Tier eligible), 20 GB encrypted `gp3` volume, IMDSv2 enforced.
 - **Bootstrap (`user_data.sh`):** Configures `Asia/Kolkata` timezone, allocates and mounts a **2 GB swap file** (`vm.swappiness=10`), installs Python 3 `venv`/`pip`/`jq`, starts `amazon-ssm-agent`, and prepares `/opt/equity-pulse/.venv`.
