@@ -31,6 +31,100 @@ data "aws_s3_bucket" "landing" {
   bucket = local.landing_bucket
 }
 
+# ---------- GitHub Actions OIDC Role Policy (self-managed via Terraform) ----------
+import {
+  to = aws_iam_role_policy.github_actions
+  id = "equity-pulse-github-actions:equity-pulse-terraform-least-privilege"
+}
+
+data "aws_iam_policy_document" "github_actions" {
+  statement {
+    sid    = "EquityPulseBuckets"
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket",
+      "s3:GetBucket*",
+      "s3:GetEncryptionConfiguration",
+      "s3:GetLifecycleConfiguration",
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+    resources = [
+      data.aws_s3_bucket.landing.arn,
+      "${data.aws_s3_bucket.landing.arn}/*",
+    ]
+  }
+
+  statement {
+    sid    = "EC2AndSSMInMumbaiOnly"
+    effect = "Allow"
+    actions = [
+      "ec2:*",
+      "ssm:SendCommand",
+      "ssm:GetCommandInvocation",
+      "ssm:ListCommandInvocations",
+      "ssm:DescribeInstanceInformation",
+    ]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = [var.region]
+    }
+  }
+
+  statement {
+    sid    = "ScopedIAMForWorkerOnly"
+    effect = "Allow"
+    actions = [
+      "iam:GetRole",
+      "iam:CreateRole",
+      "iam:DeleteRole",
+      "iam:TagRole",
+      "iam:UntagRole",
+      "iam:PassRole",
+      "iam:AttachRolePolicy",
+      "iam:DetachRolePolicy",
+      "iam:PutRolePolicy",
+      "iam:GetRolePolicy",
+      "iam:DeleteRolePolicy",
+      "iam:ListRolePolicies",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListInstanceProfilesForRole",
+      "iam:CreateInstanceProfile",
+      "iam:DeleteInstanceProfile",
+      "iam:GetInstanceProfile",
+      "iam:AddRoleToInstanceProfile",
+      "iam:RemoveRoleFromInstanceProfile",
+      "iam:TagInstanceProfile",
+    ]
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/equity-pulse-*",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/equity-pulse-*",
+    ]
+  }
+
+  statement {
+    sid    = "BudgetsAlert"
+    effect = "Allow"
+    actions = [
+      "budgets:ViewBudget",
+      "budgets:ModifyBudget",
+      "budgets:TagResource",
+      "budgets:UntagResource",
+      "budgets:ListTagsForResource",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions" {
+  name   = "equity-pulse-terraform-least-privilege"
+  role   = "equity-pulse-github-actions"
+  policy = data.aws_iam_policy_document.github_actions.json
+}
+
 # ---------- Stacks ----------
 module "network" {
   source = "../../modules/network"
@@ -62,6 +156,7 @@ module "ec2_worker" {
 
 # ---------- Budget alerts (50% / 90%) ----------
 resource "aws_budgets_budget" "monthly" {
+  depends_on   = [aws_iam_role_policy.github_actions]
   name         = "${local.name}-monthly"
   budget_type  = "COST"
   limit_amount = var.monthly_budget_usd
