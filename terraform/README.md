@@ -8,7 +8,7 @@ terraform/
 │   ├── security/     # egress-only SG (optional emergency SSH)
 │   ├── iam/          # EC2 role: SSM + Bronze bucket write; instance profile
 │   └── ec2_worker/   # m7i-flex.large Ubuntu 24.04, 20 GB gp3, IMDSv2, swap via user_data
-└── envs/dev/         # wires modules + Bronze bucket + AWS Budget alerts
+└── envs/dev/         # wires modules + landing bucket + AWS Budget alerts
 ```
 
 ## 1. Bootstrap (once, locally, admin credentials)
