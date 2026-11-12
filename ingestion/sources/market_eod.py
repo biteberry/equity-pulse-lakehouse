@@ -137,7 +137,7 @@ def run_market_eod(
         except Exception as exc:
             logger.warning("Failed EOD fetch for %s: %s", tk, exc)
 
-    df = enforce_schema(pl.DataFrame(records), OHLCV_SCHEMA).sort("ticker")
+    df = enforce_schema(records, OHLCV_SCHEMA).sort("ticker")
     s3_key = s3_key_daily_ohlcv(trade_date)
     writer.put_parquet(df, s3_key)
 

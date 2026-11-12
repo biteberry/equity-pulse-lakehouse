@@ -117,7 +117,7 @@ def run_historical_5y_backfill(
                 logger.warning("Skipping historical fetch for %s: %s", tk, exc)
 
         if all_rows:
-            full_df = enforce_schema(pl.DataFrame(all_rows), OHLCV_SCHEMA)
+            full_df = enforce_schema(all_rows, OHLCV_SCHEMA)
             full_df = full_df.with_columns(
                 pl.col("trade_date").dt.year().alias("_year"),
                 pl.when(pl.col("universe_category").str.contains("NIFTY_50"))
@@ -158,9 +158,9 @@ def run_historical_5y_backfill(
                 logger.warning("Macro 5Y fetch warning for %s: %s", ind_code, exc)
 
         if macro_rows:
-            macro_df = enforce_schema(
-                pl.DataFrame(macro_rows), DAILY_MACRO_SCHEMA
-            ).sort(["indicator_code", "trade_date"])
+            macro_df = enforce_schema(macro_rows, DAILY_MACRO_SCHEMA).sort(
+                ["indicator_code", "trade_date"]
+            )
             m_key = s3_key_historical_macro()
             writer.put_parquet(macro_df, m_key)
             s3_keys.append(m_key)

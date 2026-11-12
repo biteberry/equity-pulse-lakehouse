@@ -84,10 +84,22 @@ def load_recent_ipos_seed() -> list[dict[str, Any]]:
     return rows
 
 
+def _is_valid_mainboard_equity_symbol(sym: str) -> bool:
+    """Reject debt/NCD series (containing digits like 888CIFCL33, SMCG04) and REIT/InvIT/PP codes."""
+    if not sym or len(sym) > 15:
+        return False
+    # Indian NCDs/Bonds have digits in the symbol (except '3MINDIA', '5PAISA', '63MOONS')
+    if any(ch.isdigit() for ch in sym) and sym not in {"3MINDIA", "5PAISA", "63MOONS"}:
+        return False
+    if sym.endswith(("PP", "PP1", "INVIT", "INVT", "REIT", "NCD")):
+        return False
+    return True
+
+
 def fetch_dynamic_past_1y_ipos(
     as_of_date: dt.date, nse: NSESession | None = None
 ) -> list[dict[str, Any]]:
-    """Fetch mainboard IPOs listed on NSE in the trailing 365 days."""
+    """Fetch mainboard Equity IPOs listed on NSE in the trailing 365 days."""
     session = nse or NSESession()
     cutoff = as_of_date - dt.timedelta(days=365)
     discovered: list[dict[str, Any]] = []
@@ -98,28 +110,35 @@ def fetch_dynamic_past_1y_ipos(
             if not isinstance(row, dict):
                 continue
             sym = (row.get("symbol") or "").strip().upper()
-            if not sym:
+            if not _is_valid_mainboard_equity_symbol(sym):
                 continue
-            # Filter out SME issues if flagged as SME
-            sec_type = str(row.get("securityType") or row.get("series") or "EQ").upper()
-            if "SME" in sec_type or sec_type == "SM":
+            # Strictly keep Mainboard Equity ("EQ" / "EQUITY") and exclude Debt, NCD, SME, InvIT
+            sec_type = str(row.get("securityType") or "").strip().upper()
+            series = str(row.get("series") or "EQ").strip().upper()
+            if any(
+                bad in sec_type
+                for bad in ("DEBT", "NCD", "BOND", "SME", "INVIT", "REIT", "PREF")
+            ):
+                continue
+            if series not in ("EQ", "EQUITY", ""):
                 continue
             list_dt = _parse_nse_date(
                 row.get("listingDate") or row.get("issueEndDate")
             )
-            if list_dt and list_dt < cutoff:
+            if not list_dt or list_dt < cutoff or list_dt > as_of_date:
                 continue
             company = (
                 row.get("companyName") or row.get("company") or sym
             ).strip()
             ticker = f"{sym}.NS"
+            sector = (row.get("industry") or "Diversified").strip() or "Diversified"
             discovered.append(
                 {
                     "nse_symbol": sym,
                     "ticker": ticker,
                     "company_name": company,
-                    "sector": row.get("industry") or "",
-                    "industry": row.get("industry") or "",
+                    "sector": sector,
+                    "industry": sector,
                     "universe_category": "RECENT_IPO_1Y",
                     "listing_date": list_dt,
                 }
@@ -178,10 +197,8 @@ def build_universe_dataframe(
                 "_batch_id": batch_id,
             }
 
-    df = pl.DataFrame(list(by_ticker.values()))
-    return enforce_schema(df, EQUITY_MASTER_SCHEMA).sort(
-        ["universe_category", "ticker"]
-    )
+    df = enforce_schema(list(by_ticker.values()), EQUITY_MASTER_SCHEMA)
+    return df.sort(["universe_category", "ticker"])
 
 
 def run_universe_and_reference_sync(

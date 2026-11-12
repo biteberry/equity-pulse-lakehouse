@@ -270,9 +270,7 @@ def run_ipo_tracker(
         ingested_at=ingested_at,
         batch_id=batch_id,
     )
-    pipeline_df = enforce_schema(
-        pl.DataFrame(pipeline_rows), IPO_PIPELINE_SCHEMA
-    )
+    pipeline_df = enforce_schema(pipeline_rows, IPO_PIPELINE_SCHEMA)
     if not pipeline_df.is_empty():
         pipeline_df = pipeline_df.sort(["ipo_status", "company_name"])
 
