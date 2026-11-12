@@ -1,0 +1,220 @@
+name: "Run Equity Pulse Ingestion on EC2 via SSM"
+description: "Starts EC2 worker, syncs code, runs Python CLI via SSM, uploads to S3 Landing Bucket, stops EC2 (always), and writes GitHub Step Summary."
+
+inputs:
+  aws_role_arn:
+    description: "IAM Role ARN for GitHub OIDC authentication"
+    required: true
+  aws_region:
+    description: "AWS Region"
+    required: false
+    default: "ap-south-1"
+  workflow_title:
+    description: "Human-readable workflow title for the summary"
+    required: true
+  cli_args:
+    description: "Arguments passed to `python -m ingestion.cli` (e.g. `--job daily_market_all --date today`)"
+    required: true
+  git_ref:
+    description: "Git branch or commit ref to checkout on EC2"
+    required: false
+    default: "main"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure AWS Credentials (OIDC)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role_arn }}
+        aws-region: ${{ inputs.aws_region }}
+
+    - name: Resolve EC2 Ingestion Worker Instance
+      id: inst
+      shell: bash
+      run: |
+        set -euo pipefail
+        ID=$(aws ec2 describe-instances \
+          --filters "Name=tag:Role,Values=ingestion-worker" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+          --query "Reservations[0].Instances[0].InstanceId" --output text)
+        if [ -z "$ID" ] || [ "$ID" = "None" ]; then
+          echo "::error::No EC2 worker instance with tag Role=ingestion-worker found."
+          exit 1
+        fi
+        echo "id=$ID" >> "$GITHUB_OUTPUT"
+        echo "Resolved EC2 Worker Instance: $ID"
+
+    - name: Start EC2 Instance & Wait for SSM Agent Ready
+      shell: bash
+      run: |
+        set -euo pipefail
+        INST_ID="${{ steps.inst.outputs.id }}"
+        STATE=$(aws ec2 describe-instances --instance-ids "$INST_ID" --query "Reservations[0].Instances[0].State.Name" --output text)
+        if [ "$STATE" = "stopping" ]; then
+          echo "Instance is currently stopping; waiting for stopped state first..."
+          aws ec2 wait instance-stopped --instance-ids "$INST_ID"
+        fi
+        echo "Starting EC2 instance $INST_ID..."
+        aws ec2 start-instances --instance-ids "$INST_ID" >/dev/null
+        aws ec2 wait instance-running --instance-ids "$INST_ID"
+
+        echo "Waiting for SSM Agent to report Online..."
+        for i in {1..30}; do
+          PING=$(aws ssm describe-instance-information \
+            --filters "Key=InstanceIds,Values=$INST_ID" \
+            --query "InstanceInformationList[0].PingStatus" --output text 2>/dev/null || echo "None")
+          if [ "$PING" = "Online" ]; then
+            echo "SSM Agent is Online!"
+            break
+          fi
+          sleep 5
+        done
+
+    - name: Execute Ingestion Script on EC2 via AWS SSM
+      id: ssm_run
+      shell: bash
+      env:
+        CLI_ARGS: ${{ inputs.cli_args }}
+        GIT_REF: ${{ inputs.git_ref }}
+        REPO_URL: "https://github.com/${{ github.repository }}.git"
+      run: |
+        set -euo pipefail
+        INST_ID="${{ steps.inst.outputs.id }}"
+
+        REMOTE_SCRIPT=$(cat <<EOF
+        set -euo pipefail
+        export AWS_DEFAULT_REGION="${{ inputs.aws_region }}"
+        export AWS_REGION="${{ inputs.aws_region }}"
+        mkdir -p /opt/equity-pulse
+        if [ ! -d /opt/equity-pulse/repo/.git ]; then
+          git clone "$REPO_URL" /opt/equity-pulse/repo
+        fi
+        cd /opt/equity-pulse/repo
+        git fetch origin --prune
+        git checkout -f "$GIT_REF"
+        git pull origin "$GIT_REF" --ff-only || true
+
+        if [ ! -d /opt/equity-pulse/.venv ]; then
+          python3 -m venv /opt/equity-pulse/.venv
+        fi
+        /opt/equity-pulse/.venv/bin/pip install --quiet --upgrade pip
+        /opt/equity-pulse/.venv/bin/pip install --quiet -r ingestion/requirements.txt
+
+        /opt/equity-pulse/.venv/bin/python -m ingestion.cli $CLI_ARGS
+        EOF
+        )
+
+        PARAMS=$(jq -n --arg cmd "$REMOTE_SCRIPT" '{commands: [$cmd], executionTimeout: ["3600"]}')
+        CMD_ID=$(aws ssm send-command \
+          --instance-ids "$INST_ID" \
+          --document-name "AWS-RunShellScript" \
+          --parameters "$PARAMS" \
+          --query "Command.CommandId" --output text)
+
+        echo "Dispatched SSM Command ID: $CMD_ID"
+        for i in {1..360}; do
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$CMD_ID" \
+            --instance-id "$INST_ID" \
+            --query "Status" --output text 2>/dev/null || echo "Pending")
+          if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+            echo "SSM Command finished with status: $STATUS"
+            break
+          fi
+          sleep 5
+        done
+
+        aws ssm get-command-invocation \
+          --command-id "$CMD_ID" \
+          --instance-id "$INST_ID" \
+          --output json > /tmp/ssm_invocation.json
+
+        SSM_STATUS=$(jq -r '.Status' /tmp/ssm_invocation.json)
+        echo "ssm_status=$SSM_STATUS" >> "$GITHUB_OUTPUT"
+
+        echo "=== EC2 STDOUT ==="
+        jq -r '.StandardOutputContent // ""' /tmp/ssm_invocation.json
+        echo "=== EC2 STDERR ==="
+        jq -r '.StandardErrorContent // ""' /tmp/ssm_invocation.json >&2
+
+        if [ "$SSM_STATUS" != "Success" ]; then
+          echo "::error::SSM command ended with status: $SSM_STATUS"
+          exit 1
+        fi
+
+    - name: Stop EC2 Instance (Unconditional FinOps Guardrail)
+      id: stop_ec2
+      if: always() && steps.inst.outputs.id != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        INST_ID="${{ steps.inst.outputs.id }}"
+        echo "Stopping EC2 instance $INST_ID to preserve Free Tier hours..."
+        aws ec2 stop-instances --instance-ids "$INST_ID" >/dev/null
+        aws ec2 wait instance-stopped --instance-ids "$INST_ID"
+        FINAL_STATE=$(aws ec2 describe-instances --instance-ids "$INST_ID" --query "Reservations[0].Instances[0].State.Name" --output text)
+        echo "final_state=$FINAL_STATE" >> "$GITHUB_OUTPUT"
+        echo "EC2 Instance $INST_ID state is now: $FINAL_STATE"
+
+    - name: Write GitHub Workflow Summary
+      if: always()
+      shell: bash
+      env:
+        WORKFLOW_TITLE: ${{ inputs.workflow_title }}
+        INST_ID: ${{ steps.inst.outputs.id }}
+        FINAL_STATE: ${{ steps.stop_ec2.outputs.final_state }}
+        SSM_STATUS: ${{ steps.ssm_run.outputs.ssm_status }}
+      run: |
+        python3 - <<'PYEOF' >> "$GITHUB_STEP_SUMMARY"
+        import json, os, re
+        from pathlib import Path
+
+        title = os.environ.get("WORKFLOW_TITLE", "Equity Pulse Ingestion")
+        inst_id = os.environ.get("INST_ID", "unknown")
+        final_state = os.environ.get("FINAL_STATE", "unknown")
+        ssm_status = os.environ.get("SSM_STATUS", "Unknown")
+
+        stdout = ""
+        inv_path = Path("/tmp/ssm_invocation.json")
+        if inv_path.exists():
+            data = json.loads(inv_path.read_text(encoding="utf-8"))
+            stdout = data.get("StandardOutputContent") or ""
+
+        match = re.search(
+            r"===SUMMARY_JSON_START===\s*(\{.*?\})\s*===SUMMARY_JSON_END===",
+            stdout,
+            re.DOTALL,
+        )
+
+        print(f"## 📊 {title}")
+        print(f"- **EC2 Worker Instance:** `{inst_id}`")
+        print(f"- **EC2 Post-Run State:** 🛑 `{final_state}`")
+        print(f"- **SSM Execution Status:** `{ssm_status}`\n")
+
+        if match:
+            summary = json.loads(match.group(1))
+            badge = "✅ SUCCESS" if summary.get("overall_status") == "SUCCESS" else "❌ FAILED"
+            print(f"- **Batch ID:** `{summary.get('batch_id')}`")
+            print(f"- **Target Date:** `{summary.get('run_date')}`")
+            print(f"- **Landing Bucket:** `s3://{summary.get('bucket')}/`")
+            print(f"- **Overall Pipeline Status:** **{badge}**")
+            print(f"- **Total Rows Written:** `{summary.get('total_rows_written', 0):,}`\n")
+
+            print("| Job | Status | Entities | Rows Written | Duration (s) | S3 Target Keys |")
+            print("| :--- | :---: | :---: | :---: | :---: | :--- |")
+            for j in summary.get("jobs", []):
+                icon = "✅" if j.get("status") == "SUCCESS" else "❌"
+                keys_list = j.get("s3_keys") or []
+                keys_fmt = "<br>".join(f"`{k}`" for k in keys_list[:4])
+                if len(keys_list) > 4:
+                    keys_fmt += f"<br>*(+{len(keys_list) - 4} more)*"
+                if not keys_fmt and j.get("error_message"):
+                    keys_fmt = f"⚠️ `{j.get('error_message')}`"
+                print(
+                    f"| `{j.get('job_name')}` | {icon} `{j.get('status')}` | "
+                    f"{j.get('entities_processed', 0)} | {j.get('rows_written', 0):,} | "
+                    f"{j.get('execution_duration_sec', 0)}s | {keys_fmt} |"
+                )
+        else:
+            print("> ⚠️ Structured summary JSON was not emitted (SSM output may have been truncated or failed early). Check step logs for details.")
+        PYEOF

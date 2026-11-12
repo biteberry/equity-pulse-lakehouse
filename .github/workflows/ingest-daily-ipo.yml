@@ -1,0 +1,42 @@
+name: ingest-daily-ipo
+
+# Workflow C: Daily 11:00 PM IST (Every day) + Manual trigger
+# Ingests Upcoming IPOs + Open IPOs + Completed IPOs waiting to list + Refreshes Past 1-Year Listed IPO Universe
+on:
+  schedule:
+    # 11:00 PM IST = 17:30 UTC (Daily)
+    - cron: "30 17 * * *"
+  workflow_dispatch:
+    inputs:
+      run_date:
+        description: "Snapshot date (YYYY-MM-DD or 'today')"
+        required: false
+        default: "today"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: equity-pulse-ec2-worker
+  cancel-in-progress: false
+
+jobs:
+  daily-ipo-pipeline:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Daily IPO Pipeline Ingestion on EC2
+        uses: ./.github/actions/run-on-ec2
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          aws_region: "ap-south-1"
+          workflow_title: "Daily IPO Pipeline Tracker (Upcoming + Open + Completed Waiting to List)"
+          git_ref: ${{ github.ref_name }}
+          cli_args: >-
+            --job ipo_tracker
+            --date ${{ inputs.run_date || 'today' }}

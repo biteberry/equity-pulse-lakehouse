@@ -1,0 +1,16 @@
+source_ticker,related_ticker,related_entity,relationship_type,sector,confidence_weight
+RELIANCE.NS,JIOFIN.NS,Jio Financial Services Ltd,SUBSIDIARY_DEMERGED,Financial Services,0.95
+RELIANCE.NS,ONGC.NS,Oil & Natural Gas Corporation,SECTOR_PEER,Oil Gas & Consumable Fuels,0.80
+TCS.NS,INFY.NS,Infosys Ltd,SECTOR_PEER,Information Technology,0.95
+TCS.NS,HCLTECH.NS,HCL Technologies Ltd,SECTOR_PEER,Information Technology,0.90
+TCS.NS,WIPRO.NS,Wipro Ltd,SECTOR_PEER,Information Technology,0.88
+HDFCBANK.NS,ICICIBANK.NS,ICICI Bank Ltd,SECTOR_PEER,Financial Services,0.95
+HDFCBANK.NS,HDFCLIFE.NS,HDFC Life Insurance,GROUP_AFFILIATE,Financial Services,0.90
+SBIN.NS,SBILIFE.NS,SBI Life Insurance,SUBSIDIARY,Financial Services,0.95
+TATAMOTORS.NS,TATASTEEL.NS,Tata Steel Ltd,SUPPLIER_AND_GROUP,Metals & Mining,0.85
+TATAMOTORS.NS,M&M.NS,Mahindra & Mahindra Ltd,SECTOR_PEER,Automobile and Auto Components,0.90
+MARUTI.NS,HYUNDAI.NS,Hyundai Motor India Ltd,SECTOR_PEER,Automobile and Auto Components,0.92
+ZOMATO.NS,SWIGGY.NS,Swiggy Ltd,DIRECT_COMPETITOR,Consumer Services,0.98
+NTPC.NS,NTPCGREEN.NS,NTPC Green Energy Ltd,SUBSIDIARY,Power,0.98
+BAJFINANCE.NS,BAJAJFINSV.NS,Bajaj Finserv Ltd,PARENT_COMPANY,Financial Services,0.98
+ULTRACEMCO.NS,GRASIM.NS,Grasim Industries Ltd,PARENT_COMPANY,Construction Materials,0.95
