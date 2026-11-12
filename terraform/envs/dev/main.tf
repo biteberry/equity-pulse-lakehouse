@@ -46,9 +46,9 @@ module "security" {
 }
 
 module "iam" {
-  source            = "../../modules/iam"
-  name              = local.name
-  bronze_bucket_arn = data.aws_s3_bucket.landing.arn
+  source             = "../../modules/iam"
+  name               = local.name
+  landing_bucket_arn = data.aws_s3_bucket.landing.arn
 }
 
 module "ec2_worker" {

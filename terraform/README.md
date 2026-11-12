@@ -6,7 +6,7 @@ terraform/
 ├── modules/
 │   ├── network/      # VPC, public subnet, IGW, route table, S3 gateway endpoint
 │   ├── security/     # egress-only SG (optional emergency SSH)
-│   ├── iam/          # EC2 role: SSM + Bronze bucket write; instance profile
+│   ├── iam/          # EC2 role: SSM + landing bucket write; instance profile
 │   └── ec2_worker/   # m7i-flex.large Ubuntu 24.04, 20 GB gp3, IMDSv2, swap via user_data
 └── envs/dev/         # wires modules + landing bucket + AWS Budget alerts
 ```
