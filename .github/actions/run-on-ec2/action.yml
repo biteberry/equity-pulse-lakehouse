@@ -91,8 +91,11 @@ runs:
             commands: [
               "#!/bin/bash",
               "set -eu",
+              "export HOME=/root",
+              "export DEBIAN_FRONTEND=noninteractive",
               ("export AWS_DEFAULT_REGION=" + $region),
               ("export AWS_REGION=" + $region),
+              "if ! command -v git >/dev/null 2>&1 || ! python3 -m venv --help >/dev/null 2>&1; then apt-get update -y && apt-get install -y python3-venv python3-pip git jq; fi",
               "mkdir -p /opt/equity-pulse",
               ("if [ ! -d /opt/equity-pulse/repo/.git ]; then git clone " + $repo + " /opt/equity-pulse/repo; fi"),
               "cd /opt/equity-pulse/repo",
@@ -100,7 +103,7 @@ runs:
               "git fetch origin --prune",
               ("git checkout -f " + $ref),
               ("git reset --hard origin/" + $ref),
-              "if [ ! -d /opt/equity-pulse/.venv ]; then python3 -m venv /opt/equity-pulse/.venv; fi",
+              "if [ ! -x /opt/equity-pulse/.venv/bin/pip ]; then rm -rf /opt/equity-pulse/.venv && python3 -m venv /opt/equity-pulse/.venv; fi",
               "/opt/equity-pulse/.venv/bin/pip install --quiet --upgrade pip",
               "/opt/equity-pulse/.venv/bin/pip install --quiet -r ingestion/requirements.txt",
               ("/opt/equity-pulse/.venv/bin/python -m ingestion.cli " + $args)
