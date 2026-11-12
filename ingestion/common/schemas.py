@@ -83,8 +83,15 @@ IPO_PIPELINE_SCHEMA: dict[str, pl.DataType] = {
 }
 
 
-def enforce_schema(df: pl.DataFrame, schema: dict[str, pl.DataType]) -> pl.DataFrame:
+def enforce_schema(
+    df: pl.DataFrame | list[dict[str, object]],
+    schema: dict[str, pl.DataType],
+) -> pl.DataFrame:
     """Cast and order columns strictly according to the target Polars schema."""
+    if isinstance(df, list):
+        if not df:
+            return pl.DataFrame(schema=schema)
+        df = pl.DataFrame(df, schema_overrides=schema, infer_schema_length=None)
     if df.is_empty():
         return pl.DataFrame(schema=schema)
     exprs: list[pl.Expr] = []

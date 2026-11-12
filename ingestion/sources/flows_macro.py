@@ -115,14 +115,14 @@ def run_flows_macro(
         except Exception as exc:
             logger.warning("Macro indicator %s failed: %s", ind_code, exc)
 
-    macro_df = enforce_schema(pl.DataFrame(macro_rows), DAILY_MACRO_SCHEMA).sort(
+    macro_df = enforce_schema(macro_rows, DAILY_MACRO_SCHEMA).sort(
         "indicator_code"
     )
     macro_key = s3_key_daily_macro(trade_date)
     writer.put_parquet(macro_df, macro_key)
 
     fii_rows = _fetch_fii_dii_rows(trade_date, ingested_at, batch_id)
-    fii_df = enforce_schema(pl.DataFrame(fii_rows), FII_DII_FLOWS_SCHEMA)
+    fii_df = enforce_schema(fii_rows, FII_DII_FLOWS_SCHEMA)
     fii_key = s3_key_fii_dii_flows(trade_date)
     writer.put_parquet(fii_df, fii_key)
 
