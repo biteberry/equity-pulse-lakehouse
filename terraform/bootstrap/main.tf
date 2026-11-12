@@ -32,15 +32,10 @@ locals {
   state_bucket = "equity-pulse-tfstate-${data.aws_caller_identity.current.account_id}"
 }
 
-# ---------- Terraform state bucket ----------
+# ---------- Terraform state / landing bucket ----------
 resource "aws_s3_bucket" "tfstate" {
   bucket = local.state_bucket
   lifecycle { prevent_destroy = true }
-}
-
-resource "aws_s3_bucket_versioning" "tfstate" {
-  bucket = aws_s3_bucket.tfstate.id
-  versioning_configuration { status = "Enabled" }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "tfstate" {

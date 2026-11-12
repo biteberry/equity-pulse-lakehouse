@@ -44,6 +44,7 @@ data "aws_iam_policy_document" "github_actions" {
     actions = [
       "s3:ListBucket",
       "s3:GetBucket*",
+      "s3:PutBucketVersioning",
       "s3:GetEncryptionConfiguration",
       "s3:GetLifecycleConfiguration",
       "s3:GetObject",
@@ -123,6 +124,14 @@ resource "aws_iam_role_policy" "github_actions" {
   name   = "equity-pulse-terraform-least-privilege"
   role   = "equity-pulse-github-actions"
   policy = data.aws_iam_policy_document.github_actions.json
+}
+
+resource "aws_s3_bucket_versioning" "landing" {
+  depends_on = [aws_iam_role_policy.github_actions]
+  bucket     = data.aws_s3_bucket.landing.id
+  versioning_configuration {
+    status = "Suspended"
+  }
 }
 
 # ---------- Stacks ----------
