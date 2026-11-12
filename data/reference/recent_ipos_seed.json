@@ -1,0 +1,14 @@
+[
+  {"nse_symbol": "HYUNDAI", "ticker": "HYUNDAI.NS", "company_name": "Hyundai Motor India Ltd.", "sector": "Automobile and Auto Components", "industry": "Passenger Cars & Utility Vehicles", "listing_date": "2024-10-22"},
+  {"nse_symbol": "SWIGGY", "ticker": "SWIGGY.NS", "company_name": "Swiggy Ltd.", "sector": "Consumer Services", "industry": "E-Retail / E-Commerce", "listing_date": "2024-11-13"},
+  {"nse_symbol": "NTPCGREEN", "ticker": "NTPCGREEN.NS", "company_name": "NTPC Green Energy Ltd.", "sector": "Power", "industry": "Power Generation", "listing_date": "2024-11-27"},
+  {"nse_symbol": "VMM", "ticker": "VMM.NS", "company_name": "Vishal Mega Mart Ltd.", "sector": "Consumer Services", "industry": "Department Stores", "listing_date": "2024-12-18"},
+  {"nse_symbol": "SAI", "ticker": "SAILIFE.NS", "company_name": "Sai Life Sciences Ltd.", "sector": "Healthcare", "industry": "Pharmaceuticals & Biotechnology", "listing_date": "2024-12-18"},
+  {"nse_symbol": "MOBIKWIK", "ticker": "MOBIKWIK.NS", "company_name": "One Mobikwik Systems Ltd.", "sector": "Financial Services", "industry": "Financial Technology (Fintech)", "listing_date": "2024-12-18"},
+  {"nse_symbol": "IGIL", "ticker": "IGIL.NS", "company_name": "International Gemmological Institute (India) Ltd.", "sector": "Services", "industry": "Other Commercial Services", "listing_date": "2024-12-20"},
+  {"nse_symbol": "VENTIVE", "ticker": "VENTIVE.NS", "company_name": "Ventive Hospitality Ltd.", "sector": "Consumer Services", "industry": "Hotels & Resorts", "listing_date": "2024-12-30"},
+  {"nse_symbol": "STALLION", "ticker": "STALLION.NS", "company_name": "Stallion India Fluorochemicals Ltd.", "sector": "Chemicals", "industry": "Specialty Chemicals", "listing_date": "2025-01-23"},
+  {"nse_symbol": "HEXAWARE", "ticker": "HEXAWARE.NS", "company_name": "Hexaware Technologies Ltd.", "sector": "Information Technology", "industry": "Computers - Software & Consulting", "listing_date": "2025-02-19"},
+  {"nse_symbol": "AJAXENGG", "ticker": "AJAXENGG.NS", "company_name": "Ajax Engineering Ltd.", "sector": "Capital Goods", "industry": "Construction Vehicles", "listing_date": "2025-02-17"},
+  {"nse_symbol": "ATHER", "ticker": "ATHER.NS", "company_name": "Ather Energy Ltd.", "sector": "Automobile and Auto Components", "industry": "2/3 Wheelers", "listing_date": "2025-05-06"}
+]
